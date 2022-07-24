@@ -1,66 +1,125 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useContext, createContext, useEffect, useCallback} from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
 import Leaflet from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import countries_data from './data/country_data.js'
 import wc from 'which-country'
 
-
+/*
+  Using a country code (ISO 3166-1 alpha-3) returns the corresponding country information.
+  @param {string} countryCode - ISO 3166-1 alpha-3 country code
+  @return {string} Country information of the countryCode
+*/
 function getCountryInfo(countryCode) {
   return countries_data.filter(
     function(country) { return country.cca3 == countryCode; }
   )
 }
 
-// Para usar `useMapEvents()` é necessário que seja um Component filho do Mapa
-const LocationMarker = () => {
-    const [position, setPosition] = useState(null)
-    const markerReference = useRef(null);
+/*
+  Modal made to display information of a certain country based on the function getCountryInfo
+*/
+function CountryInformationModal(props){
+  if(!props.countryInfo){
+    return null;
+  }
 
-    const map = useMapEvents({
-        click(e) {
-            setPosition(e.latlng);
-            let {lat, lng} = e.latlng;
-            console.log(lat)
-            console.log(lng)
-            let selected_country_code = wc([lng, lat]);
-            console.log(selected_country_code)
-            if(selected_country_code.trim() !== ""){
-              console.log(getCountryInfo(selected_country_code));
-            }else{
-              console.log("Impossible place");
-            }
-        },
-        popupclose(e) {
-          if(markerReference.current !== null){
-            console.log(e)
-            setPosition(null)
-          }
+  let { countryInfo, handleModalExit } = props.countryInfo;
 
-        }
-    });
+  var backgroundDivStyles = {
+    position:"absolute",
+    width:"100%",
+    height:"100%",
+    backgroundColor:"rgb(0,0,0,0.2)",
+    zIndex:500
+  }
 
-    useEffect(() => {
-      if(markerReference.current !== null && !markerReference.current.isPopupOpen()){
-        markerReference.current.openPopup();
-      }
-    }, [position])
-    
-    return position === null ? null : (
-      <Marker position={position} ref={markerReference}>
-          <Popup>Clicado aqui!</Popup>
-      </Marker>
-    )
-};
+  let informationModalStyles = {
+    position: "absolute",
+    left: "0",
+    right: "0",
+    top: "0",
+    bottom: "0",
+    margin: "auto",
+    width:"50%",
+    height:"50%",
+    borderRadius: "10px",
+    backgroundColor:"#ffffff",
+    fontFamily: "NotoColorEmojiLimited"
+  }
+
+  return countryInfo === null ? null : (
+    <div style={backgroundDivStyles} onClick={handleModalExit}>
+      <div style={informationModalStyles}>
+        <h1>{countryInfo.name.common}{countryInfo.flag}</h1>
+      </div>
+    </div>
+  );
+}
+
+/* 
+  Non visible component used to share clicked position with other parent/sister components
+  <MapComponent /> allows getting the latitude and longitude of clicked position, but it doesnt allow
+                 sharing the information with sister components, this function is used to grab the latLng
+                 and share it with the <App/> component, to allow it to share to any child component of the app
+                 Its used to send the information to the <CountryInformationModal/>
+  
+  This component needs to be child of <MapComponent />
+*/
+const SetPositionDummy = (props) => {
+  const setPosition = props.setPosition;
+
+  const map = useMapEvents({
+    click(e) {
+      setPosition(e.latlng)
+    }
+  })
+
+}
 
 function App() {
   var mapStyles = {width:"100vw", height:"100vh"};
   const corner1 = Leaflet.latLng(-90, -200)
   const corner2 = Leaflet.latLng(90, 200)
   const bounds = Leaflet.latLngBounds(corner1, corner2)
+  const [countryInfo, setCountryInfo] = useState(null)
+  const [position, setPosition] = useState(null)
+
+  const handleModalExit = useCallback(() => {
+    setCountryInfo(null);
+  }, []);
+
   
+  /* Updates countryInfo when position updates */
+  useEffect(()=>{
+    var errorFlag = false;
+    if(position){
+      let {lat, lng} = position;
+      let selected_country_code = wc([lng, lat]);
+      console.log(selected_country_code)
+      if(selected_country_code){
+        let tmp = getCountryInfo(selected_country_code)[0];
+        setCountryInfo(tmp);
+
+        console.log(tmp);
+      }else{
+        setCountryInfo(null);
+        errorFlag = true;
+      }
+    }
+    else{
+      errorFlag = true;
+    }
+    if(errorFlag){
+      console.log("Impossible place");
+    }
+
+  }, [position])
+
+
   return (
-    <div>
+    <div style={{position:"absolute"}}>
+      <CountryInformationModal countryInfo={ {countryInfo, handleModalExit} }/>
       <MapContainer style={mapStyles} center={[22, 0]} zoom={3} minZoom={3} maxBoundsViscosity={1.0} maxBounds={bounds}>
         {/*
         <TileLayer
@@ -79,7 +138,7 @@ function App() {
           url="https://tiles.stadiamaps.com/tiles/osm_bright/{z}/{x}/{y}{r}.png"
           noWrap="true"
         />
-        <LocationMarker />
+        <SetPositionDummy setPosition={setPosition}/>
       </MapContainer>
     </div>
   );
