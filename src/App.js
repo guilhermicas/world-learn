@@ -1,4 +1,4 @@
-import { useState, useContext, createContext, useEffect, useCallback} from 'react';
+import { useState, useEffect, useCallback} from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
 import Leaflet from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -15,6 +15,9 @@ function getCountryInfo(countryCode) {
     function(country) { return country.cca3 == countryCode; }
   )
 }
+
+const capitalizeFirstLetter = ([ first, ...rest ], locale = navigator.language) =>
+  first === undefined ? '' : first.toLocaleUpperCase(locale) + rest.join('')
 
 /*
   Modal made to display information of a certain country based on the function getCountryInfo
@@ -45,13 +48,35 @@ function CountryInformationModal(props){
     height:"50%",
     borderRadius: "10px",
     backgroundColor:"#ffffff",
-    fontFamily: "NotoColorEmojiLimited"
+    fontFamily: "NotoColorEmojiLimited",
+    overflow:"auto"
   }
+
+  let keyStyles = {
+    margin:"0"
+  }
+
+  function CountryElement(data) {
+    return Object.entries(data).map(([key, value]) => (
+      <>
+        <p style={keyStyles} key={key}>{capitalizeFirstLetter(key)}</p>
+        {(typeof value === 'object' && value !== null) ? (
+          <ul style={{margin:"0"}}>
+            {CountryElement(value)}
+          </ul>
+        ) : (
+          <li>{value}</li>
+        )}
+      </>
+    ))
+
+  }
+
 
   return countryInfo === null ? null : (
     <div style={backgroundDivStyles} onClick={handleModalExit}>
       <div style={informationModalStyles}>
-        <h1>{countryInfo.name.common}{countryInfo.flag}</h1>
+        {CountryElement(countryInfo)}
       </div>
     </div>
   );
@@ -88,7 +113,6 @@ function App() {
   const handleModalExit = useCallback(() => {
     setCountryInfo(null);
   }, []);
-
   
   /* Updates countryInfo when position updates */
   useEffect(()=>{
@@ -130,6 +154,11 @@ function App() {
         <TileLayer
           attribution='Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ'
           url="https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}"
+          noWrap="true"
+        />
+        <TileLayer
+          attribution='&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors'
+          url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
           noWrap="true"
         />
         */}
